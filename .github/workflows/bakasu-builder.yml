@@ -125,7 +125,7 @@ jobs:
           else
             REPO_URL="${{ github.event.inputs.KERNEL_TREE_1 }}"
           fi
-          git clone --depth=1 --recurse-submodules --remote-submodules --shallow-submodules --branch "${{ env.KERNEL_TREE_BRANCH }}" "${REPO_URL}" kernel_tree
+          git clone --depth=1 --recurse-submodules --shallow-submodules --branch "${{ env.KERNEL_TREE_BRANCH }}" "${REPO_URL}" kernel_tree
 
       - name: Kernel Version
         run: |
