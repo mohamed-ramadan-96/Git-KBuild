@@ -128,6 +128,13 @@ jobs:
           fi
           git clone --depth=1 --branch "${{ env.KERNEL_TREE_BRANCH }}" "${REPO_URL}" kernel_tree
 
+      - name: Apply NFC I2C Write Retry Patch
+        run: |
+          cd kernel_tree
+          patch --batch --forward -p1 < ../Patches/NFC/nfc_i2c_write_retry.patch
+          git diff --check
+          grep -n -A24 "static ssize_t nfc_write" drivers/nfc/nq-nci.c
+
       - name: Kernel Version
         run: |
           cd kernel_tree
