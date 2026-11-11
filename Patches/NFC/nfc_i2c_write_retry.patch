@@ -1,0 +1,57 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+Subject: [PATCH] NFC: retry transient ENOTCONN I2C writes
+
+The NFCC can briefly NACK an I2C write while waking up. Retry
+transient -ENOTCONN failures up to three times before returning
+the original error. Preserve short-write handling as -EIO.
+
+---
+ drivers/nfc/nq-nci.c | 23 ++++++++++++++++++++---
+ 1 file changed, 20 insertions(+), 3 deletions(-)
+
+diff --git a/drivers/nfc/nq-nci.c b/drivers/nfc/nq-nci.c
+index 000000000000..000000000000 100644
+--- a/drivers/nfc/nq-nci.c
++++ b/drivers/nfc/nq-nci.c
+@@ -402,6 +402,7 @@ static ssize_t nfc_write(struct file *filp, const char __user *buf,
+ 	struct nqx_dev *nqx_dev = filp->private_data;
+ 	char *tmp = NULL;
+ 	int ret = 0;
++	int retry_cnt;
+ 
+ 	if (!nqx_dev) {
+ 		ret = -ENODEV;
+@@ -426,13 +427,29 @@ static ssize_t nfc_write(struct file *filp, const char __user *buf,
+ 	print_send_buffer(nqx_dev, tmp, count);
+ #endif
+ 
+-	ret = i2c_master_send(nqx_dev->client, tmp, count);
+-	if (ret != count) {
++	for (retry_cnt = 1; retry_cnt <= 3; retry_cnt++) {
++		ret = i2c_master_send(nqx_dev->client, tmp, count);
++		if (ret == count)
++			break;
++
++		if (ret == -ENOTCONN && retry_cnt < 3) {
++			dev_warn(&nqx_dev->client->dev,
++				 "%s: I2C write returned -ENOTCONN, retry %d/3\n",
++				 __func__, retry_cnt);
++			usleep_range(1000, 1100);
++			continue;
++		}
++
+ 		dev_err(&nqx_dev->client->dev,
+-		"%s: failed to write %d\n", __func__, ret);
+-		ret = -EIO;
++			"%s: failed to write %d after %d attempt(s)\n",
++			__func__, ret, retry_cnt);
++		if (ret >= 0)
++			ret = -EIO;
+ 		goto out_free;
+ 	}
++
+ #ifdef NFC_KERNEL_BU
+ 	dev_dbg(&nqx_dev->client->dev,
+ 			 "%s : i2c-%d: NfcNciTx %x %x %x\n",
+-- 
+2.45.2
